@@ -44,6 +44,9 @@ def _grafik(ws_veri, x_sutun, y_sutunlar, ilk, son, baslik, x_ad, y_ad, renkler)
         s.marker.symbol = "none"
         s.graphicalProperties.line.solidFill = renk
         s.graphicalProperties.line.width = 15000
+        if len(g.series) == 1:  # ikinci seri (ticari) üst üste binmesin diye kesikli
+            s.graphicalProperties.line.dashStyle = "dash"
+            s.graphicalProperties.line.width = 22000
         g.series.append(s)
     return g
 
@@ -82,11 +85,12 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor):
     r = _tablo(oz, r + 1, 1, ["", "Özgün UKB", "Ticari UKB"], [
         ["İrtifa gürültüsü (std, m)", masa["ozgun_gurultu_m"], masa["ticari_gurultu_m"]],
         ["10 dk'daki kayma (m)", masa["ozgun_kayma_m"], masa["ticari_kayma_m"]],
-        ["Kayıp örnek (%)", masa["ozgun_kayip_yuzde"], None],
-        ["Kart sıcaklık artışı (°C)", masa["sicaklik_artisi_c"], None],
+        ["Kayıp örnek (%)", masa["ozgun_kayip_yuzde"], masa["ticari_kayip_yuzde"]],
+        ["Kart sıcaklık artışı (°C)", masa["sicaklik_artisi_c"], "kaydetmiyor"],
     ], [None, "0.00", "0.00"])
     oz.cell(row=r + 1, column=1,
-            value="Özgün kartın kayması kart ısındıkça basınç sensörünün kaymasından kaynaklanıyor.").font = NOT
+            value="Özgün kartın kayması kart ısındıkça basınç sensörünün kaymasından kaynaklanıyor. "
+                  "Ticari kart sıcaklık kaydetmiyor.").font = NOT
 
     # --- vakum testi
     r += 3
@@ -161,9 +165,10 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor):
     v1 = vakumlar[0]
     t_o = v1["ozgun"]["t_s"].to_numpy()
     h_t = np.interp(t_o, v1["ticari"]["zaman_hizali_s"], v1["ticari"]["irtifa_m"], left=np.nan, right=np.nan)
+    ortak = ~np.isnan(h_t)  # grafikte iki kart da aynı zaman aralığında görünsün
     ws_v, son_v = _veri_sayfasi(wb, "Vakum 1", ["Zaman (s)", "Özgün (m)", "Ticari (m)"],
-                                [t_o, v1["ozgun"]["irtifa_m"].to_numpy(), h_t])
-    oz.add_chart(_grafik(ws_v, 1, [2, 3], 2, son_v, "Vakum denemesi 1 – irtifa eşdeğeri", "Zaman (s)",
+                                [t_o[ortak], v1["ozgun"]["irtifa_m"].to_numpy()[ortak], h_t[ortak]])
+    oz.add_chart(_grafik(ws_v, 1, [2, 3], 2, son_v, "Vakum denemesi 1 – iki kart (eğriler neredeyse üst üste)", "Zaman (s)",
                          "İrtifa (m)", ["2E75B6", "ED7D31"]), "H5")
 
     u = ucus["df"]

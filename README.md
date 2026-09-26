@@ -59,7 +59,7 @@ Mevcut durum:
 
 ![Önerilen süreç](docs/surec_onerilen.png)
 
-Diyagramların draw.io dosyaları `docs/` klasöründe.
+Diyagramların düzenlenebilir hâlleri `docs/` klasöründeki `.drawio.svg` dosyaları; GitHub'da resim olarak görünüyor, draw.io ile açılıp düzenlenebiliyor.
 
 ## Eksikler
 

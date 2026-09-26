@@ -7,6 +7,13 @@ from .okuma import oku_ozgun, oku_ticari
 from .temizleme import temizle, veri_kaybi_orani
 
 
+def ticari_kayip_orani(tc, nominal_s=0.05):
+    """Ticari kaydın zaman damgalarındaki boşluklardan kayıp örnek oranı (%)."""
+    fark = tc["zaman_s"].diff().dropna()
+    kayip = ((fark[fark > 2.5 * nominal_s] / nominal_s).round() - 1).sum()
+    return float(100.0 * kayip / (len(tc) + kayip))
+
+
 def masa_testi(ozgun_yolu, ticari_yolu):
     d, bozuk = oku_ozgun(ozgun_yolu)
     df, kayit, _ = temizle(d, bozuk)
@@ -19,6 +26,7 @@ def masa_testi(ozgun_yolu, ticari_yolu):
         "ozgun_kayma_m": float(df.loc[df["t_s"] > son - 30, "irtifa_m"].mean() - df.loc[df["t_s"] < 30, "irtifa_m"].mean()),
         "ticari_kayma_m": float(tc.loc[tc["zaman_s"] > son - 30, "irtifa_m"].mean() - tc.loc[tc["zaman_s"] < 30, "irtifa_m"].mean()),
         "ozgun_kayip_yuzde": veri_kaybi_orani(df, kayit),
+        "ticari_kayip_yuzde": ticari_kayip_orani(tc),
         "sicaklik_artisi_c": float(df.loc[df["t_s"] > son - 30, "sicaklik_c"].mean() - df.loc[df["t_s"] < 30, "sicaklik_c"].mean()),
     }
 

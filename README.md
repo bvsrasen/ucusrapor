@@ -1,6 +1,6 @@
 # UçuşRapor
 
-TEKNOFEST Orta İrtifa'da yarışan ÇGM AKANA Rocket Team'de aviyonik yazılımında çalıştım. Atıştan önce vakum odası, yer ateşleme ve masa testleri yaptık ama testlerde veriyi sadece ekrandan izledik, hiçbirini kaydetmedik. Özgün uçuş bilgisayarımızla (STM32) ticari uçuş bilgisayarını hiçbir zaman aynı test üzerinden yan yana koyup karşılaştırmadık.
+TEKNOFEST Orta İrtifa'da yarışan ÇGM AKANA Rocket Team'de aviyonik yazılımında çalıştım. Atıştan önce vakumlama, yer ateşleme ve masa testleri yaptık ama testlerde veriyi sadece ekrandan izledik, hiçbirini kaydetmedik. Özgün uçuş bilgisayarımızla (STM32) ticari uçuş bilgisayarını hiçbir zaman aynı test üzerinden yan yana koyup karşılaştırmadık.
 
 Sonuçta kurtarmayı neredeyse tamamen ticari karta bıraktık. Atışta ticari kartın rampada yer istasyonuyla bağlantısı kurulamadı (büyük ihtimalle hakem altimetresi takılırken bir kablo temassızlık yaptı) ve paraşüt açılmadı. Uçuş sırasında özgün kartın basınç verisinin, roket ses hızını geçerken bozulduğunu gördük; yani bizim algoritmamız da o hâliyle tepe noktasını doğru bulamayacaktı.
 

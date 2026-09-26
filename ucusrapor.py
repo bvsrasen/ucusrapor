@@ -1,71 +1,54 @@
 """
-UçuşRapor - Komut satırı arayüzü
-===============================
+Özgün ve ticari UKB test kayıtlarını karşılaştırıp Excel raporu üretir.
 
-Ham uçuş log dosyasını tek komutla okur, temizler, metrikleri hesaplar ve
-standart Excel raporunu üretir (NFR-02: tek komutla çalıştırma).
-
-Kullanım:
-    python ucusrapor.py veri/ucus_log_simule.csv
-    python ucusrapor.py veri/ucus_log_simule.csv --cikti rapor/Test_1.xlsx
-    python ucusrapor.py gercek_log.csv --gercek      (simüle uyarısını kaldırır)
+    python ucusrapor.py                  # veri/ klasöründeki örnek verilerle
+    python ucusrapor.py --veri testler/  # kendi kayıtlarınla (aynı dosya adlarıyla)
 """
-
 import argparse
-import sys
 import time
 from pathlib import Path
 
+import pandas as pd
+
 from ucusrapor import __version__
-from ucusrapor.isleme import VeriFormatHatasi, metrikleri_hesapla, temizle, veri_oku, zenginlestir
-from ucusrapor.rapor import excel_raporu_olustur, rapor_bilgisi
-
-
-def arguman_al():
-    p = argparse.ArgumentParser(description="UçuşRapor: roket uçuş logundan otomatik Excel raporu üretir.")
-    p.add_argument("log_dosyasi", help="Ham uçuş log dosyası (CSV)")
-    p.add_argument("--cikti", help="Excel rapor dosyasının yolu (varsayılan: rapor/<log_adı>_rapor.xlsx)")
-    p.add_argument("--gercek", action="store_true", help="Gerçek uçuş verisi (rapordaki simüle uyarısını kaldırır)")
-    p.add_argument("--version", action="version", version=f"UçuşRapor {__version__}")
-    return p.parse_args()
+from ucusrapor.karsilastirma import masa_testi, ucus_analizi, vakum_testi
+from ucusrapor.rapor import rapor_yaz
 
 
 def main():
-    args = arguman_al()
-    baslangic = time.perf_counter()
-    log = Path(args.log_dosyasi)
+    ap = argparse.ArgumentParser(description="UKB test karşılaştırma raporu")
+    ap.add_argument("--veri", default="veri", help="test kayıtlarının bulunduğu klasör")
+    ap.add_argument("--cikti", default="rapor/UKB_karsilastirma.xlsx")
+    ap.add_argument("--zamanlayici", type=float, default=20.9,
+                    help="simülasyondan beklenen tepe noktası süresi (s), zamanlayıcı yedeği için")
+    args = ap.parse_args()
 
-    print(f"\n🚀 UçuşRapor {__version__}")
-    print("─" * 52)
-    try:
-        ham = veri_oku(log)
-    except (FileNotFoundError, VeriFormatHatasi) as e:
-        print(f"❌ Hata: {e}")
-        sys.exit(1)
-    print(f"[1/4] Log okundu ..................... {len(ham):>5} satır")
+    bas = time.perf_counter()
+    k = Path(args.veri)
+    print(f"UçuşRapor {__version__}  –  veri: {k}/")
 
-    sonuc = temizle(ham)
-    print(f"[2/4] Veri temizlendi ................ {len(sonuc.kayitlar):>5} sorun işlendi")
-    for tip, adet in sorted(sonuc.ozet().items()):
-        print(f"        • {tip:<22} {adet:>3}")
+    masa = masa_testi(k / "masa_ozgun.csv", k / "masa_ticari.csv")
+    print(f"  masa testi: özgün kayma {masa['ozgun_kayma_m']:.1f} m, ticari {masa['ticari_kayma_m']:.1f} m")
 
-    df = zenginlestir(sonuc.temiz)
-    m = metrikleri_hesapla(df)
-    print("[3/4] Metrikler hesaplandı")
-    print(f"        • Maksimum irtifa ........ {m['maks_irtifa_m']:>8.1f} m  (t = {m['apogee_zamani_s']:.1f} s)")
-    print(f"        • Maksimum ivme .......... {m['maks_ivme_g']:>8.2f} g")
-    print(f"        • Sürüklenme paraşütü .... {m['suruklenme_parasutu_s']:>8.1f} s")
-    print(f"        • Ana paraşüt ............ {m['ana_parasut_s']:>8.1f} s  ({m['ana_parasut_irtifa_m']:.0f} m)")
-    print(f"        • Toplam uçuş süresi ..... {m['ucus_suresi_s']:>8.1f} s")
+    vakumlar = []
+    for _, r in pd.read_csv(k / "vakum_referans.csv").iterrows():
+        n = int(r["deneme"])
+        v = vakum_testi(k / f"vakum_{n}_ozgun.csv", k / f"vakum_{n}_ticari.csv", float(r["vana_acilis_s"]), n)
+        vakumlar.append(v)
+        print(f"  vakum {n}: referans {v['vana_acilis_s']:.1f} s | özgün (mevcut) {v['ozgun_basit_s']:.1f} s"
+              f" | özgün (filtreli) {v['ozgun_filtreli_s']:.1f} s | ticari {v['ticari_s']:.1f} s")
 
-    cikti = Path(args.cikti) if args.cikti else Path("rapor") / f"{log.stem}_rapor.xlsx"
-    cikti.parent.mkdir(parents=True, exist_ok=True)
-    sure = time.perf_counter() - baslangic
-    excel_raporu_olustur(df, sonuc, m, cikti, rapor_bilgisi(log.name, sure, simule=not args.gercek))
-    toplam = time.perf_counter() - baslangic
-    print(f"[4/4] Excel raporu oluşturuldu ....... {cikti}")
-    print("─" * 52)
-    print(f"✅ Tamamlandı: {toplam:.2f} saniye (hedef < 300 s)\n")
+    ref = pd.read_csv(k / "ucus_referans.csv").iloc[0]
+    ucus = ucus_analizi(k / "ucus_ozgun.csv", float(ref["zemin_basinci_pa"]), args.zamanlayici,
+                        float(ref["gercek_tepe_s"]))
+    print(f"  uçuş simülasyonu: gerçek tepe {ucus['gercek_tepe_s']:.2f} s")
+    for s in ucus["tablo"].itertuples(index=False):
+        print(f"      {s.yontem:<38} {s.tespit_s:>6.2f} s")
+
+    ates = pd.read_csv(k / "ateslemeler.csv", dtype=str).fillna("")
+    Path(args.cikti).parent.mkdir(parents=True, exist_ok=True)
+    rapor_yaz(args.cikti, masa, vakumlar, ucus, ates, k)
+    print(f"rapor: {args.cikti}  ({time.perf_counter() - bas:.1f} s)")
 
 
 if __name__ == "__main__":

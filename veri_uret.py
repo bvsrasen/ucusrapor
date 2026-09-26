@@ -1,217 +1,235 @@
 """
-UçuşRapor - Simüle Uçuş Verisi Üretici
-=====================================
+Örnek test verisi üretici.
 
-AKANA orta irtifa roketinin uçuş profiline dayalı, STM32 aviyonik kartının
-SD karta yazdığı log formatında (CSV) simüle bir uçuş kaydı üretir.
+Gerçek test kayıtlarımız olmadığı için (testlerde veriyi sadece ekrandan izledik,
+kaydetmedik) aracı geliştirirken bu betikle ürettiğim örnek verileri kullandım.
+Değerler TEKNOFEST Orta İrtifa sınıfı bir roketin profiline göre ayarlandı
+(asgari 8000 ft, hedef ~3 km, yanma sonunda ~Mach 1.1).
 
-Veri temizleme adımını test edebilmek için kayda BİLEREK hatalar eklenir:
-  - Eksik değerler (boş hücreler)
-  - Tekrar eden (duplike) satırlar
-  - Sensör sıçramaları (fiziksel olarak imkânsız ani değerler)
-  - Geçersiz FSM durum kodu
+Üretilen dosyalar:
+  veri/masa_ozgun.csv, veri/masa_ticari.csv          masa (durağan) testi, 10 dk
+  veri/vakum_1..3_ozgun.csv, veri/vakum_1..3_ticari.csv  vakum odası denemeleri
+  veri/ucus_ozgun.csv                                 uçuş simülasyonu (özgün UKB log formatında)
+  veri/ateslemeler.csv                                yer ateşleme test formu
+  veri/vakum_referans.csv                             vakum denemelerinde vananın açıldığı an (el ile not)
 
-Eklenen her hata `veri/beklenen_hatalar.json` dosyasına yazılır; testler
-temizleme modülünün bunları gerçekten yakaladığını bu dosyayla doğrular.
-
-Kullanım:
-    python veri_uret.py
+Özgün UKB formatı : t_ms, basinc_pa, sicaklik_c, ax_g, ay_g, az_g, durum
+Ticari UKB formatı: zaman_s, irtifa_m, olay   (1 m çözünürlük, 20 Hz)
 """
-
-import json
+import csv
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
-# ---------------------------------------------------------------------------
-# Simülasyon parametreleri (AKANA orta irtifa sınıfı roket için yaklaşık değerler)
-# ---------------------------------------------------------------------------
-TOHUM = 2026                # Aynı veriyi her seferinde üretmek için sabit rastgelelik tohumu
-DT = 0.1                    # Örnekleme aralığı (s) -> 10 Hz kayıt
-RAMPA_SURESI = 3.0          # Kalkış öncesi rampada bekleme (s)
-YANMA_SURESI = 3.2          # Motor yanma süresi (s)
-ITKI = 1450.0               # Ortalama motor itkisi (N)
-KUTLE_DOLU = 13.0           # Kalkış kütlesi (kg)
-KUTLE_BOS = 11.2            # Yakıt bittikten sonraki kütle (kg)
-CD_A = 0.0072               # Sürükleme katsayısı x kesit alanı (m^2)
-G = 9.80665                 # Yerçekimi ivmesi (m/s^2)
-ANA_PARASUT_IRTIFA = 600.0  # Ana paraşütün açıldığı irtifa (m)
-SURUKLENME_HIZI = 24.0      # Sürüklenme paraşütü ile iniş hızı (m/s)
-ANA_PARASUT_HIZI = 6.5      # Ana paraşüt ile iniş hızı (m/s)
-YER_BASINCI = 905.0         # Atış alanı zemin basıncı (hPa) ~ 1000 m rakım
-YER_SICAKLIGI = 19.0        # Zemin sıcaklığı (°C)
-
-DURUM_ADLARI = {
-    0: "Rampada Bekleme",
-    1: "Kalkış",
-    2: "Motor Yanması",
-    3: "Süzülme",
-    4: "Apogee",
-    5: "Sürüklenme Paraşütü",
-    6: "Ana Paraşüt",
-    7: "İniş",
-}
+KLASOR = Path(__file__).parent / "veri"
+P0_LAB = 101250.0      # İstanbul'daki laboratuvar zemin basıncı (Pa)
+P0_SAHA = 90650.0      # Aksaray atış alanı zemin basıncı (Pa), ~950 m rakım
+G = 9.80665
 
 
-def hava_yogunlugu(h):
-    """Basit üstel atmosfer modeli ile hava yoğunluğu (kg/m^3)."""
-    return 1.10 * np.exp(-h / 8500.0)
+def basinc(h, p0):
+    return p0 * (1 - 2.25577e-5 * h) ** 5.25588
 
 
-def basinc_hesapla(h):
-    """Barometrik formül ile zeminden h metre yukarıdaki basınç (hPa)."""
-    return YER_BASINCI * (1 - 2.25577e-5 * h) ** 5.25588
+def irtifa(p, p0):
+    return (1 - (p / p0) ** 0.190263) / 2.25577e-5
 
 
-def ucus_simule_et():
-    """Temiz (hatasız) uçuş verisini üretir ve DataFrame olarak döndürür."""
-    rng = np.random.default_rng(TOHUM)
-    kayitlar = []
+# ---------------------------------------------------------------- özgün UKB kusurları
+def ozgun_kaydi_boz(satirlar, rng, bosluk_olasiligi=0.004, i2c_olasiligi=0.003, kopya_olasiligi=0.002):
+    """SD kart / sensör kaynaklı gerçekçi bozulmalar ekler.
 
-    t, h, v = 0.0, 0.0, 0.0
-    durum = 0
-    apogee_sayac = 0
-    inis_sayac = 0
-
-    while True:
-        # --- Durum makinesi geçişleri (STM32 üzerindeki FSM'nin mantığı) ---
-        ucus_t = t - RAMPA_SURESI  # ateşlemeden itibaren geçen süre
-        if durum == 0 and ucus_t >= 0:
-            durum = 1
-        elif durum == 1 and ucus_t >= 0.5:
-            durum = 2
-        elif durum == 2 and ucus_t >= YANMA_SURESI:
-            durum = 3
-        elif durum == 3 and v <= 0:
-            durum = 4
-        elif durum == 4:
-            apogee_sayac += 1
-            if apogee_sayac >= 5:           # apogee 0.5 s boyunca raporlanır
-                durum = 5
-        elif durum == 5 and h <= ANA_PARASUT_IRTIFA:
-            durum = 6
-        elif durum == 6 and h <= 0.5:
-            durum = 7
-
-        # --- Fizik: itki, sürükleme, yerçekimi ---
-        if durum in (1, 2):
-            kutle = KUTLE_DOLU - (KUTLE_DOLU - KUTLE_BOS) * min(ucus_t / YANMA_SURESI, 1)
-            itki = ITKI
-        else:
-            kutle = KUTLE_BOS
-            itki = 0.0
-
-        if durum in (0, 7):
-            a = 0.0
-            v = 0.0
-            ozgul_kuvvet = G  # rampada/yerde ivmeölçer +1 g okur
-        elif durum in (5, 6):
-            hedef_hiz = -SURUKLENME_HIZI if durum == 5 else -ANA_PARASUT_HIZI
-            # Paraşüt altında hız hedef iniş hızına yaklaşır
-            v += (hedef_hiz - v) * 0.35
-            a = 0.0
-            ozgul_kuvvet = G + rng.normal(0, 0.8)
-        else:
-            surukleme = 0.5 * hava_yogunlugu(h) * CD_A * v * abs(v)
-            a = (itki - surukleme) / kutle - G
-            v += a * DT
-            ozgul_kuvvet = a + G  # ivmeölçer yerçekimini hissetmez
-
-        h = max(h + v * DT, 0.0)
-        if durum == 7:
-            h = 0.0
-
-        kayitlar.append({
-            "zaman_ms": int(round(t * 1000)),
-            "irtifa_m": round(h + rng.normal(0, 0.6), 2),
-            "basinc_hPa": round(basinc_hesapla(h) + rng.normal(0, 0.05), 2),
-            "ivme_x_g": round(rng.normal(0, 0.05), 3),
-            "ivme_y_g": round(rng.normal(0, 0.05), 3),
-            "ivme_z_g": round(ozgul_kuvvet / G + rng.normal(0, 0.04), 3),
-            "sicaklik_C": round(YER_SICAKLIGI - 0.0065 * h + rng.normal(0, 0.15), 2),
-            "durum": durum,
-        })
-
-        t = round(t + DT, 3)
-        if durum == 7:
-            inis_sayac += 1
-            if inis_sayac >= 30:  # inişten sonra 3 s daha kayıt
-                break
-
-    return pd.DataFrame(kayitlar)
-
-
-def hata_ekle(df):
-    """Temiz veriye test amaçlı bilinen hatalar ekler.
-
-    Dönüş: (hatalı DataFrame, beklenen hataların listesi)
-    Hata kayıtlarındaki `zaman_ms` alanı, hatalı satırın zaman damgasıdır.
+    - SD yazma gecikmesi: arada 150-600 ms'lik veri kaybı
+    - I2C okuma hatası: basınç 0 ya da bir önceki değerin aynısı (takılı kalma)
+    - Aynı satırın iki kez yazılması
+    - Kaydın sonunda yarım kalmış satır (güç kesilince)
     """
-    rng = np.random.default_rng(TOHUM + 1)
-    df = df.copy()
-    beklenen = []
-    n = len(df)
-
-    # 1) Eksik değerler: 12 hücre boşaltılır
-    sensor_sutunlari = ["irtifa_m", "basinc_hPa", "ivme_z_g", "sicaklik_C"]
-    eksik_satirlar = rng.choice(np.arange(50, n - 50), size=12, replace=False)
-    for i in sorted(eksik_satirlar):
-        sutun = sensor_sutunlari[int(rng.integers(0, len(sensor_sutunlari)))]
-        df.loc[i, sutun] = np.nan
-        beklenen.append({"tip": "EKSIK_DEGER", "zaman_ms": int(df.loc[i, "zaman_ms"]), "sutun": sutun})
-
-    # 2) Sensör sıçramaları: 5 adet fiziksel olarak imkânsız ani değer
-    ucus_satirlari = df.index[df["durum"].isin([3, 5, 6])]
-    sicrama_satirlari = rng.choice(ucus_satirlari[10:-10], size=5, replace=False)
-    sicrama_tanimlari = [
-        ("irtifa_m", 4800.0),
-        ("irtifa_m", -1200.0),
-        ("ivme_z_g", 58.0),
-        ("ivme_z_g", -41.0),
-        ("irtifa_m", 9999.0),
-    ]
-    for i, (sutun, deger) in zip(sorted(sicrama_satirlari), sicrama_tanimlari):
-        if pd.isna(df.loc[i, sutun]):
+    cikti, atla = [], 0
+    for i, s in enumerate(satirlar):
+        if atla:
+            atla -= 1
             continue
-        df.loc[i, sutun] = deger
-        beklenen.append({"tip": "SENSOR_SICRAMASI", "zaman_ms": int(df.loc[i, "zaman_ms"]), "sutun": sutun})
+        if rng.random() < bosluk_olasiligi:
+            atla = int(rng.integers(4, 15))
+            continue
+        s = list(s)
+        r = rng.random()
+        if r < i2c_olasiligi / 2:
+            s[1] = 0
+        elif r < i2c_olasiligi and cikti:
+            s[1] = cikti[-1][1]
+        cikti.append(s)
+        if rng.random() < kopya_olasiligi:
+            cikti.append(list(s))
+    return cikti
 
-    # 3) Geçersiz FSM durum kodu: 1 satır
-    gecersiz_satir = int(rng.choice(df.index[df["durum"] == 5]))
-    df.loc[gecersiz_satir, "durum"] = 9
-    beklenen.append({"tip": "GECERSIZ_DURUM", "zaman_ms": int(df.loc[gecersiz_satir, "zaman_ms"]), "sutun": "durum"})
 
-    # 4) Tekrar eden satırlar: SD karta yazma hatasını taklit eden 8 kopya
-    kopya_satirlari = sorted(rng.choice(np.arange(20, n - 20), size=8, replace=False))
-    parcalar, onceki = [], 0
-    for i in kopya_satirlari:
-        parcalar.append(df.iloc[onceki:i + 1])
-        parcalar.append(df.iloc[[i]])  # aynı satır bir kez daha yazılır
-        beklenen.append({"tip": "DUPLIKE_SATIR", "zaman_ms": int(df.loc[i, "zaman_ms"]), "sutun": "-"})
-        onceki = i + 1
-    parcalar.append(df.iloc[onceki:])
-    df = pd.concat(parcalar, ignore_index=True)
+def yaz_ozgun(yol, satirlar, yarim_satir=True):
+    with open(yol, "w", newline="") as f:
+        f.write("t_ms,basinc_pa,sicaklik_c,ax_g,ay_g,az_g,durum\n")
+        for s in satirlar:
+            f.write(f"{s[0]},{s[1]:.0f},{s[2]:.2f},{s[3]:.2f},{s[4]:.2f},{s[5]:.2f},{s[6]}\n")
+        if yarim_satir:
+            f.write(f"{satirlar[-1][0] + 40},{satirlar[-1][1]:.0f},2")  # güç kesildiğinde yarım kalan satır
 
-    df["durum"] = df["durum"].astype(int)
-    return df, beklenen
+
+def yaz_ticari(yol, satirlar):
+    with open(yol, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["zaman_s", "irtifa_m", "olay"])
+        w.writerows(satirlar)
+
+
+# ---------------------------------------------------------------- masa testi
+def masa_testi(rng):
+    sure, dt_o, dt_t = 600.0, 0.04, 0.05
+    t = np.arange(0, sure, dt_o)
+    sicaklik = 22.0 + 9.0 * (1 - np.exp(-t / 180))            # kart ısınıyor
+    # basınç sensörünün sıcaklıkla kayması + oda basıncının yavaş değişimi
+    p = P0_LAB - 4.0 * (sicaklik - 22.0) + 6 * np.sin(t / 120) + rng.normal(0, 3.2, t.size)
+    ozgun = [[int(round(ti * 1000)), pi, si + rng.normal(0, 0.05), rng.normal(0, 0.012), rng.normal(0, 0.012),
+              1.0 + rng.normal(0, 0.015), 0] for ti, pi, si in zip(t, p, sicaklik)]
+    ozgun = ozgun_kaydi_boz(ozgun, rng)
+    yaz_ozgun(KLASOR / "masa_ozgun.csv", ozgun)
+
+    tt = np.arange(0, sure, dt_t)
+    h = irtifa(P0_LAB + 6 * np.sin(tt / 120) + rng.normal(0, 4, tt.size), P0_LAB)
+    yaz_ticari(KLASOR / "masa_ticari.csv", [[f"{a:.2f}", int(round(b)), ""] for a, b in zip(tt, h)])
+
+
+# ---------------------------------------------------------------- vakum odası
+def vakum_denemesi(no, rng):
+    """Pompa ile basınç ~3 km irtifa eşdeğerine düşürülür, sonra vana elle açılır."""
+    hedef_p = basinc(3000 + rng.normal(0, 150), P0_LAB)
+    inis_suresi = 55 + rng.normal(0, 5)
+    bekleme = 4 + rng.random() * 3
+    vana_t = 5 + inis_suresi + bekleme       # vananın açıldığı an (referans "apogee")
+    toplam = vana_t + 45
+
+    def oda_basinci(t):
+        if t < 5:
+            return P0_LAB
+        if t < 5 + inis_suresi:
+            x = (t - 5) / inis_suresi
+            return P0_LAB - (P0_LAB - hedef_p) * (1 - np.exp(-3.2 * x)) / (1 - np.exp(-3.2))
+        if t < vana_t:
+            return hedef_p
+        return P0_LAB - (P0_LAB - hedef_p) * np.exp(-(t - vana_t) / 11)
+
+    def pompa_titresimi(t):
+        # pompa çalışırken oda basıncında birkaç Hz'lik dalgalanma oluyor
+        return 140 * np.sin(2 * np.pi * 2.3 * t) + 60 * np.sin(2 * np.pi * 5.1 * t) if 5 <= t < vana_t else 0.0
+
+    t_o = np.arange(0, toplam, 0.04)
+    ozgun = []
+    for t in t_o:
+        p = oda_basinci(t) + pompa_titresimi(t) + rng.normal(0, 3.5)
+        ozgun.append([int(round(t * 1000)), p, 23 + rng.normal(0, 0.05), rng.normal(0, 0.01), rng.normal(0, 0.01),
+                      1 + rng.normal(0, 0.015), 0])
+    ozgun = ozgun_kaydi_boz(ozgun, rng)
+    yaz_ozgun(KLASOR / f"vakum_{no}_ozgun.csv", ozgun)
+
+    # ticari kart kendi filtresinden geçirip 1 m çözünürlükle yazıyor; saati özgün karttan ~1,3 s geride başlıyor
+    saat_farki = 1.3 + rng.random() * 0.4
+    t_t = np.arange(0, toplam - saat_farki, 0.05)
+    ticari, tepe_bulundu, en_yuksek, dusus = [], False, -1e9, 0
+    h_filtre = 0.0
+    for t in t_t:
+        gercek_t = t + saat_farki
+        h_ham = irtifa(oda_basinci(gercek_t) + 0.15 * pompa_titresimi(gercek_t) + rng.normal(0, 4), P0_LAB)
+        h_filtre = 0.8 * h_filtre + 0.2 * h_ham
+        olay = ""
+        if not tepe_bulundu:
+            if h_filtre > en_yuksek:
+                en_yuksek, dusus = h_filtre, 0
+            elif h_filtre < en_yuksek - 5:
+                dusus += 1
+                if dusus >= 10:
+                    olay, tepe_bulundu = "APOGEE", True
+        ticari.append([f"{t:.2f}", int(round(h_filtre)), olay])
+    yaz_ticari(KLASOR / f"vakum_{no}_ticari.csv", ticari)
+    return {"deneme": no, "vana_acilis_s": round(vana_t, 2), "ticari_saat_farki_s": round(saat_farki, 2)}
+
+
+# ---------------------------------------------------------------- uçuş simülasyonu
+def ucus(rng):
+    """Orta irtifa uçuşu. Yanma sonunda ~Mach 1.1; ses hızı civarında statik basınç ölçümü bozuluyor."""
+    dt, t, h, v = 0.04, 0.0, 0.0, 0.0
+    rampa, yanma = 2.0, 3.4
+    m0, m1, cd_a = 24.0, 20.5, 0.021
+    satirlar = []
+
+    def itki(tu):
+        if tu < 0 or tu > yanma:
+            return 0.0
+        return 5600 if tu < 0.25 else 3900 - 700 * (tu / yanma)
+
+    tepe_t, tepe_h = None, None
+    vmaks = 0.0
+    while True:
+        tu = t - rampa
+        durum = 0 if tu < 0 else (1 if tu < 0.3 else (2 if tu < yanma else 3))
+        m = m0 - (m0 - m1) * min(max(tu, 0) / yanma, 1)
+        rho = 1.05 * np.exp(-h / 8500)
+        surukleme = 0.5 * rho * cd_a * v * abs(v) * (1.45 if 0.95 < abs(v) / 335 < 1.15 else 1.0)
+        a = (itki(tu) - surukleme) / m - G if tu >= 0 else 0.0
+        v += a * dt
+        h = max(h + v * dt, 0.0)
+        if tepe_t is None and tu > 5 and v <= 0:
+            tepe_t, tepe_h = t, h
+        mach = abs(v) / (340 - 0.004 * h)
+
+        p = basinc(h, P0_SAHA)
+        # transonik bölgede statik porttaki basınç hatası (önce düşük, sonra yüksek okuma)
+        if 0.85 < mach < 1.25:
+            x = (mach - 0.85) / 0.4
+            p += -3200 * np.sin(np.pi * x) * (1 if v > 0 else 0) + 1800 * np.sin(2 * np.pi * x) * (1 if x > 0.5 else 0)
+        p += rng.normal(0, 4 + 30 * (durum in (1, 2)))            # motor titreşimi gürültüyü artırıyor
+        az = min((a + G) / G + rng.normal(0, 0.08 + 0.6 * (durum in (1, 2))), 16.0)  # ±16 g'de doyuma giriyor
+        satirlar.append([int(round(t * 1000)), p, 24 - 0.0065 * h + rng.normal(0, 0.1),
+                         rng.normal(0, 0.2 + 0.5 * (durum in (1, 2))), rng.normal(0, 0.2 + 0.5 * (durum in (1, 2))), az, durum])
+        t += dt
+        if tepe_t and t > tepe_t + 12:
+            break
+    # uçuşta titreşim yüzünden SD kaybı daha sık
+    satirlar = ozgun_kaydi_boz(satirlar, rng, bosluk_olasiligi=0.007, i2c_olasiligi=0.006, kopya_olasiligi=0.003)
+    yaz_ozgun(KLASOR / "ucus_ozgun.csv", satirlar)
+    return {"gercek_tepe_s": round(tepe_t - rampa, 2), "gercek_tepe_m": round(tepe_h, 1),
+            "rampa_s": rampa, "zemin_basinci_pa": P0_SAHA}
+
+
+def ateslemeler():
+    # yer ateşleme testlerinde tuttuğumuz formun örnek hâli
+    satirlar = [
+        ["1", "özgün", "0.8", "1.2", "32", "hayır", "barut yetmedi, burun konisi oynadı ama çıkmadı"],
+        ["2", "özgün", "1.2", "1.3", "29", "evet", ""],
+        ["3", "ticari", "1.2", "1.1", "", "evet", "komut-ateşleme gecikmesi ölçülemedi (ticari kart iç zamanlama)"],
+        ["4", "özgün", "1.2", "0.0", "", "hayır", "süreklilik yok, konnektör gevşek; yeniden takıldı"],
+        ["5", "özgün", "1.2", "1.2", "31", "evet", ""],
+        ["6", "ticari", "1.2", "1.2", "", "evet", ""],
+    ]
+    with open(KLASOR / "ateslemeler.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["deneme", "ukb", "barut_g", "sureklilik_ohm", "gecikme_ms", "ayrilma", "not"])
+        w.writerows(satirlar)
 
 
 def main():
-    klasor = Path(__file__).parent / "veri"
-    klasor.mkdir(exist_ok=True)
-
-    temiz = ucus_simule_et()
-    hatali, beklenen = hata_ekle(temiz)
-
-    hatali.to_csv(klasor / "ucus_log_simule.csv", index=False)
-    with open(klasor / "beklenen_hatalar.json", "w", encoding="utf-8") as f:
-        json.dump(beklenen, f, ensure_ascii=False, indent=2)
-
-    tepe = temiz.loc[temiz["irtifa_m"].idxmax()]
-    print(f"Simüle uçuş üretildi: {len(hatali)} satır ({len(temiz)} temiz + {len(hatali) - len(temiz)} duplike)")
-    print(f"Tepe irtifa ≈ {tepe['irtifa_m']:.0f} m, eklenen hata sayısı: {len(beklenen)}")
-    print(f"Dosyalar: {klasor / 'ucus_log_simule.csv'}, {klasor / 'beklenen_hatalar.json'}")
+    KLASOR.mkdir(exist_ok=True)
+    rng = np.random.default_rng(7)
+    masa_testi(rng)
+    refs = [vakum_denemesi(i, rng) for i in (1, 2, 3)]
+    with open(KLASOR / "vakum_referans.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=refs[0].keys())
+        w.writeheader()
+        w.writerows(refs)
+    bilgi = ucus(rng)
+    with open(KLASOR / "ucus_referans.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=bilgi.keys())
+        w.writeheader()
+        w.writerow(bilgi)
+    ateslemeler()
+    print("örnek veriler veri/ klasörüne yazıldı")
 
 
 if __name__ == "__main__":

@@ -1,56 +1,71 @@
 # UçuşRapor
 
-Roket takımımızda (ÇGM AKANA, TEKNOFEST Orta İrtifa) her test ya da uçuştan sonra aviyonik kartın SD karta yazdığı veriyi Excel'e aktarıp elle temizliyor, grafikleri tek tek çiziyorduk. Tek bir raporu hazırlamak neredeyse 3 saat sürüyordu ve her seferinde farklı bir formatta çıkıyordu.
+TEKNOFEST Orta İrtifa'da yarışan ÇGM AKANA Rocket Team'de aviyonik yazılımında çalıştım. Atıştan önce vakum odası, yer ateşleme ve masa testleri yaptık ama testlerde veriyi sadece ekrandan izledik, hiçbirini kaydetmedik. Özgün uçuş bilgisayarımızla (STM32) ticari uçuş bilgisayarını hiçbir zaman aynı test üzerinden yan yana koyup karşılaştırmadık.
 
-Bu projede o süreci otomatikleştirmeye çalıştım: log dosyasını tek komutla okuyup temizleyen, temel uçuş metriklerini hesaplayan ve standart bir Excel raporu çıkaran küçük bir Python aracı.
+Sonuçta kurtarmayı neredeyse tamamen ticari karta bıraktık. Atışta ticari kartın rampada yer istasyonuyla bağlantısı kurulamadı (büyük ihtimalle hakem altimetresi takılırken bir kablo temassızlık yaptı) ve paraşüt açılmadı. Uçuş sırasında özgün kartın basınç verisinin, roket ses hızını geçerken bozulduğunu gördük; yani bizim algoritmamız da o hâliyle tepe noktasını doğru bulamayacaktı.
 
-![Rapor özeti](docs/rapor_ozet.png)
+Geriye dönüp baktığımda asıl eksik şuydu: testleri kaydedip iki kartı karşılaştırsaydık bu sorunların çoğunu yerde görebilir, başka bir ayırma yöntemine (ya da yedek bir tetikleme mantığına) karar verebilirdik.
+
+Bu repo o eksiği kapatmak için yazdığım küçük bir araç. İki kartın test kayıtlarını okuyor, temizliyor, saatlerini hizalıyor ve tepe noktası tespitini farklı yöntemlerle karşılaştırıp bir Excel raporu çıkarıyor.
+
+![Rapor örneği](docs/rapor_ornegi.png)
 
 ## Ne yapıyor?
 
-- Tekrar eden satırları, boş hücreleri ve bozuk durum kodlarını buluyor
-- Sensör sıçramalarını (ör. bir anda 9999 m irtifa) yakalayıp komşu değerlerden düzeltiyor
-- Maksimum irtifa, apogee zamanı, maksimum ivme, paraşüt açılma anları ve iniş hızlarını hesaplıyor
-- Sonuçları grafikli bir Excel raporuna yazıyor; düzeltilen her satır "Veri Kalitesi" sayfasında listeleniyor
+- Özgün kartın SD kayıtlarındaki bozuk / yarım satırları, kopya satırları, sensörün 0 ya da takılı döndüğü okumaları ve kayıt boşluklarını buluyor
+- Ticari kartın kaydını, irtifa eğrileri üst üste gelecek şekilde kaydırarak özgün kartın saatine hizalıyor (iki kartın saati senkron değil)
+- Masa testinde gürültü ve kaymayı, vakum odası testinde iki kartın tepe noktasını ne zaman bulduğunu karşılaştırıyor
+- Uçuş verisi üzerinde birkaç tepe noktası yöntemini deniyor: mevcut basit barometrik, filtreli, ivme entegrasyonu, Mach kilitli, zaman kilitli ve zamanlayıcı
+- Yer ateşleme testlerinde tuttuğumuz formu rapora ekliyor
 
-Metrikleri hem Python'da hem de Excel formülleriyle hesaplatıyorum, ikisi tutmazsa rapordaki "Kontrol" sütunu bunu gösteriyor.
+## Örnek veri
+
+Gerçek kayıtlarımız olmadığı için `veri_uret.py` ile örnek veri ürettim ve aracı bununla geliştirdim. **`veri/` klasöründeki dosyalar gerçek test ya da uçuş kaydı değil.** Örnek veriyi olabildiğince gerçekçi yapmaya çalıştım:
+
+- uçuş profili Orta İrtifa sınıfına göre (~3 km tepe noktası, yanma sonunda ~Mach 1.1), ses hızı civarında statik basınç hatası var
+- ivmeölçer ±16 g'de doyuma giriyor
+- SD kartta yazma gecikmesi kaynaklı boşluklar, kopya satırlar, güç kesilince yarım kalan son satır
+- kart ısındıkça basınç sensörü kayıyor
+- vakum pompası odada birkaç Hz'lik basınç dalgalanması oluşturuyor
+
+Kendi kayıtlarınla çalıştırmak için dosyaları aynı adlarla bir klasöre koyup `--veri` ile vermen yeterli.
 
 ## Kullanım
 
 ```
 pip install -r requirements.txt
-python ucusrapor.py veri/ucus_log_simule.csv
+python ucusrapor.py
 ```
 
-Rapor `rapor/` klasörüne kaydediliyor. Gerçek bir uçuş logu için komutun sonuna `--gercek` eklenebilir.
+Rapor `rapor/UKB_karsilastirma.xlsx` olarak kaydediliyor. Örnek veriyi yeniden üretmek için `python veri_uret.py`, testler için `python -m pytest`.
 
-Testleri çalıştırmak için: `python -m pytest`
+Özgün kart formatı: `t_ms, basinc_pa, sicaklik_c, ax_g, ay_g, az_g, durum`
+Ticari kart formatı: `zaman_s, irtifa_m, olay` (ticari kartın dışa aktarımını bu sütunlara çevirmek gerekiyor)
 
-## Veri hakkında
+## Örnek veriyle çıkan sonuçlar
 
-Takımın gerçek uçuş verisini paylaşamadığım için `veri_uret.py` ile bizim uçuş profilimize benzeyen simüle bir kayıt ürettim. İçine bilerek 26 hata ekledim (listesi `veri/beklenen_hatalar.json` içinde), testler bunların hepsinin yakalanıp yakalanmadığını kontrol ediyor.
-
-Log formatı: `zaman_ms, irtifa_m, basinc_hPa, ivme_x_g, ivme_y_g, ivme_z_g, sicaklik_C, durum`
-
-`durum` sütunu, STM32'deki uçuş durum makinesinin aşaması (0: rampa, 1: kalkış, 2: motor yanması, 3: süzülme, 4: apogee, 5: sürüklenme paraşütü, 6: ana paraşüt, 7: iniş).
+- Mevcut basit barometrik algoritma, vakum testlerinin üçünde de pompanın dalgalanması yüzünden ~50 s erken tetikledi; uçuşta da ses hızı civarında, ~1300 m'de tetikliyor.
+- Sadece filtre eklemek yetmiyor. İvmeölçer doyuma girdiği için ivmeden hesaplanan hız düşük çıkıyor ve Mach kilidi de erken açılıyor.
+- Kalkıştan sonraki ilk 10 s barometreyi yok sayan zaman kilidi + filtre, tepe noktasını ~0,9 s geç buluyor.
+- Rampada, hakem altimetresi takıldıktan sonra iki kartın süreklilik ve telemetri bağlantısının tekrar kontrol edilmesi gerekiyor.
 
 ## Süreç
 
-Kodlamaya başlamadan önce mevcut süreci ve hedef süreci BPMN ile çizdim (`docs/` klasöründe, draw.io dosyaları da orada). Projeyi iki sprint halinde Jira'da takip ettim; gereksinimleri, test senaryolarını ve kullanım kılavuzunu Confluence'ta yazdım.
+Mevcut durum:
 
-Mevcut süreç:
+![Mevcut süreç](docs/surec_mevcut.png)
 
-![as-is](docs/bpmn_as_is.png)
+Önerdiğim süreç:
 
-Hedeflenen süreç:
+![Önerilen süreç](docs/surec_onerilen.png)
 
-![to-be](docs/bpmn_to_be.png)
+Diyagramların draw.io dosyaları `docs/` klasöründe.
 
-## Eksikler / sonraki adımlar
+## Eksikler
 
-- Henüz gerçek bir uçuş logunda denenmedi
-- Sıçrama eşikleri bizim roketin profiline göre ayarlı, başka bir roket için gözden geçirilmesi gerekir
-- Birden fazla uçuşu karşılaştıran bir rapor eklemek istiyorum
+- Gerçek test kaydıyla henüz denenmedi. Bir sonraki test döneminde iki kartın kayıtlarını toplayıp aynı raporu çıkarmayı planlıyorum.
+- Ticari kartın gerçek dışa aktarım formatına göre bir okuyucu yazılmadı, şimdilik sütunları elle çevirmek gerekiyor.
+- Zaman kilidi süresi uçuş simülasyonundan seçildi, farklı bir motor ya da roket için yeniden ayarlanmalı.
 
 ---
 

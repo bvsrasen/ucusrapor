@@ -31,7 +31,7 @@ def main():
 
     bas = time.perf_counter()
     k = Path(args.veri)
-    print(f"UçuşRapor {__version__}  –  veri: {k}/")
+    print(f"UçuşRapor {__version__} - veri: {k}/")
 
     masa = masa_testi(k / "masa_ozgun.csv", k / "masa_ticari.csv")
     print(f"  masa testi: özgün kayma {masa['ozgun_kayma_m']:.1f} m, ticari {masa['ticari_kayma_m']:.1f} m")

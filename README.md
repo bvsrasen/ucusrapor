@@ -39,7 +39,7 @@ pip install -r requirements.txt
 python ucusrapor.py
 ```
 
-Rapor `rapor/UKB_karsilastirma.xlsx` olarak kaydediliyor. Yöntemleri çok sayıda simüle uçuşla denemek için `python ucus_tekrar.py`. Gerçek kayıtlarla çalışırken `--gercek` eklersen rapordaki "örnek veri" uyarısı kalkıyor. Rapordaki çıkarım cümleleri sonuçlardan hesaplanıyor, yani veri değişince onlar da değişiyor. Örnek veriyi yeniden üretmek için `python veri_uret.py`, testler için `python -m pytest`.
+Rapor `rapor/UKB_karsilastirma.xlsx` olarak kaydediliyor. Yöntemleri çok sayıda simüle uçuşla denemek için `python ucus_tekrar.py`. Gerçek kayıtlarla çalışırken `--gercek` eklersen rapordaki "örnek veri" uyarısı kalkıyor. Rapordaki çıkarım cümleleri sonuçlardan hesaplanıyor, yani veri değişince onlar da değişiyor. Zamanlayıcı yedeğinin süresi varsayılan olarak 20,9 s (örnek uçuş simülasyonundan); kendi roketin için `--zamanlayici` ile değiştirebilirsin. Örnek veriyi yeniden üretmek için `python veri_uret.py`, testler için `python -m pytest`.
 
 Özgün kart formatı: `t_ms, basinc_pa, sicaklik_c, ax_g, ay_g, az_g, durum`
 Ticari kart formatı: `zaman_s, irtifa_m, olay` (ticari kartın dışa aktarımını bu sütunlara çevirmek gerekiyor)

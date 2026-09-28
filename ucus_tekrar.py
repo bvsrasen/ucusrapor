@@ -23,6 +23,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=100, help="simüle edilecek uçuş sayısı")
     ap.add_argument("--tolerans", type=float, default=1.0, help="uygun sayılan en büyük hata (s)")
+    ap.add_argument("--zamanlayici", type=float, default=20.9, help="zamanlayıcı yedeğinin süresi (s)")
     args = ap.parse_args()
 
     hatalar = defaultdict(list)
@@ -30,7 +31,7 @@ def main():
         veri_uret.KLASOR = Path(gecici)
         for i in range(args.n):
             bilgi = veri_uret.ucus(np.random.default_rng(1000 + i))
-            u = ucus_analizi(Path(gecici) / "ucus_ozgun.csv", bilgi["zemin_basinci_pa"], 20.9,
+            u = ucus_analizi(Path(gecici) / "ucus_ozgun.csv", bilgi["zemin_basinci_pa"], args.zamanlayici,
                              bilgi["gercek_tepe_s"])
             for s in u["tablo"].itertuples(index=False):
                 hatalar[s.yontem].append(np.nan if s.tespit_s is None else s.tespit_s - bilgi["gercek_tepe_s"])

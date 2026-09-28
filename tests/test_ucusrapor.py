@@ -7,6 +7,7 @@ import pytest
 from ucusrapor.apogee import basit_barometrik, filtreli_barometrik
 from ucusrapor.karsilastirma import cikarimlar, masa_testi, saat_farkini_bul, ucus_analizi, vakum_testi
 from ucusrapor.okuma import oku_ozgun
+from ucusrapor.rapor import rapor_yaz
 from ucusrapor.temizleme import temizle
 
 VERI = Path(__file__).resolve().parent.parent / "veri"
@@ -20,6 +21,18 @@ def test_bozuk_ve_yarim_satirlar_atlanir(tmp_path):
     df, bozuk = oku_ozgun(f)
     assert len(df) == 2
     assert bozuk == [3, 5]
+
+
+def test_bom_ile_kaydedilmis_dosya_okunur(tmp_path):
+    f = tmp_path / "log.csv"
+    f.write_text("t_ms,basinc_pa,sicaklik_c,ax_g,ay_g,az_g,durum\n0,101000,22,0,0,1,0\n", encoding="utf-8-sig")
+    df, bozuk = oku_ozgun(f)
+    assert len(df) == 1 and bozuk == []
+
+
+def test_kisa_kayit_filtrede_hata_vermez():
+    assert filtreli_barometrik(np.arange(10) * 0.04, np.zeros(10)) is None
+    assert filtreli_barometrik(np.array([]), np.array([])) is None
 
 
 def test_yanlis_baslik_hata_verir(tmp_path):
@@ -109,3 +122,17 @@ def test_cikarimlar_sonuclardan_uretilir():
     # tepe noktasını doğru bulan bir algoritma olsaydı cümle değişmeli
     u2 = dict(u, tablo=u["tablo"].assign(tespit_s=u["gercek_tepe_s"] + 0.2))
     assert "tolerans içinde" in cikarimlar(masa, [v], u2)["karar"][0]
+
+
+def test_ticari_tepe_bulamazsa_rapor_yine_uretilir(tmp_path):
+    ref = pd.read_csv(VERI / "ucus_referans.csv").iloc[0]
+    u = ucus_analizi(VERI / "ucus_ozgun.csv", ref["zemin_basinci_pa"], ZAMANLAYICI_S, None)
+    masa = masa_testi(VERI / "masa_ozgun.csv", VERI / "masa_ticari.csv")
+    tc = (VERI / "vakum_1_ticari.csv").read_text().replace("APOGEE", "")
+    (tmp_path / "vakum_1_ticari.csv").write_text(tc)
+    v = vakum_testi(VERI / "vakum_1_ozgun.csv", tmp_path / "vakum_1_ticari.csv", 55.95, 1)
+    assert v["ticari_s"] is None
+    ates = pd.read_csv(VERI / "ateslemeler.csv", dtype=str).fillna("")
+    cikti = tmp_path / "rapor.xlsx"
+    rapor_yaz(cikti, masa, [v], u, ates, VERI, cikarimlar(masa, [v], u), ornek_veri=False)
+    assert cikti.exists()

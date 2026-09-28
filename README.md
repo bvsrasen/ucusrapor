@@ -22,7 +22,7 @@ Bu repo o eksiği kapatmak için yazdığım küçük bir araç. İki kartın te
 
 Gerçek kayıtlarımız olmadığı için `veri_uret.py` ile örnek veri ürettim ve aracı bununla geliştirdim. **`veri/` klasöründeki dosyalar gerçek test ya da uçuş kaydı değil.** Örnek veriyi olabildiğince gerçekçi yapmaya çalıştım:
 
-- uçuş profili Orta İrtifa sınıfına göre (~3 km tepe noktası, yanma sonunda ~Mach 1.1), ses hızı civarında statik basınç hatası var
+- uçuş profili Orta İrtifa sınıfına göre (~3 km tepe noktası, yanma sonunda ~Mach 1,1), ses hızı civarında statik basınç hatası var
 - ivmeölçer ±16 g'de doyuma giriyor
 - SD kartta yazma gecikmesi kaynaklı boşluklar, kopya satırlar, güç kesilince yarım kalan son satır
 - basınç sensörünün ara ara 0 döndürmesi ya da birkaç örnek aynı değerde takılı kalması
@@ -41,8 +41,8 @@ python ucusrapor.py
 
 Rapor `rapor/UKB_karsilastirma.xlsx` olarak kaydediliyor. Yöntemleri çok sayıda simüle uçuşla denemek için `python ucus_tekrar.py`. Gerçek kayıtlarla çalışırken `--gercek` eklersen rapordaki "örnek veri" uyarısı kalkıyor. Rapordaki çıkarım cümleleri sonuçlardan hesaplanıyor, yani veri değişince onlar da değişiyor. Zamanlayıcı yedeğinin süresi varsayılan olarak 20,9 s (örnek uçuş simülasyonundan); kendi roketin için `--zamanlayici` ile değiştirebilirsin. Örnek veriyi yeniden üretmek için `python veri_uret.py`, testler için `python -m pytest`.
 
-Özgün kart formatı: `t_ms, basinc_pa, sicaklik_c, ax_g, ay_g, az_g, durum`
-Ticari kart formatı: `zaman_s, irtifa_m, olay` (ticari kartın dışa aktarımını bu sütunlara çevirmek gerekiyor)
+- Özgün kart formatı: `t_ms, basinc_pa, sicaklik_c, ax_g, ay_g, az_g, durum`
+- Ticari kart formatı: `zaman_s, irtifa_m, olay` (ticari kartın dışa aktarımını bu sütunlara çevirmek gerekiyor)
 
 ## Örnek veriyle çıkan sonuçlar
 

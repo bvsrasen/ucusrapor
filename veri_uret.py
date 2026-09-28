@@ -134,7 +134,7 @@ def vakum_denemesi(no, rng):
     ozgun = ozgun_kaydi_boz(ozgun, rng)
     yaz_ozgun(KLASOR / f"vakum_{no}_ozgun.csv", ozgun)
 
-    # ticari kart kendi filtresinden geçirip 1 m çözünürlükle yazıyor; saati özgün karttan ~1,3 s geride başlıyor
+    # ticari kart kendi filtresinden geçirip 1 m çözünürlükle yazıyor; saati özgün karttan 1,3-1,7 s geride başlıyor
     saat_farki = 1.3 + rng.random() * 0.4
     t_t = np.arange(0, toplam - saat_farki, 0.05)
     ticari, tepe_bulundu, en_yuksek, dusus = [], False, -1e9, 0

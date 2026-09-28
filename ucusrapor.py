@@ -41,7 +41,7 @@ def main():
         n = int(r["deneme"])
         v = vakum_testi(k / f"vakum_{n}_ozgun.csv", k / f"vakum_{n}_ticari.csv", float(r["vana_acilis_s"]), n)
         vakumlar.append(v)
-        print(f"  vakum {n}: referans {v['vana_acilis_s']:.1f} s | özgün (mevcut) {_s(v['ozgun_basit_s'])}"
+        print(f"  vakum {n}: referans {v['vana_acilis_s']:.2f} s | özgün (mevcut) {_s(v['ozgun_basit_s'])}"
               f" | özgün (filtreli) {_s(v['ozgun_filtreli_s'])} | ticari {_s(v['ticari_s'])}")
 
     # gerçek bir uçuşta tepe noktasının doğru zamanı bilinmez; o zaman gercek_tepe_s sütunu boş bırakılabilir

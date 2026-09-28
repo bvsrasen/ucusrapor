@@ -30,6 +30,8 @@ def basit_barometrik(t, h, dusus_m=3.0, ardisik=5):
 def filtreli_barometrik(t, h, pencere=25, **kw):
     """Aynı mantık, önce hareketli ortalama uygulanarak."""
     h = np.asarray(h, dtype=float)
+    if len(h) < pencere:  # filtrelenecek kadar örnek yok (ör. kayıt kilit süresinden önce bitmiş)
+        return basit_barometrik(t, h, **kw)
     hf = np.convolve(h, np.ones(pencere) / pencere, mode="same")
     yarim = pencere // 2
     hf[:yarim] = h[:yarim]

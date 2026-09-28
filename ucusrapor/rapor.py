@@ -111,14 +111,16 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
     for k, v in enumerate(vakumlar):
         rr = bas + 1 + k
         satirlar.append([f"Deneme {v['deneme']}", v["vana_acilis_s"], v["ozgun_basit_s"], v["ozgun_filtreli_s"],
-                         v["ticari_s"], f"=E{rr}-B{rr}"])
+                         v["ticari_s"], f'=IF(E{rr}="","",E{rr}-B{rr})'])
     r = _tablo(oz, bas, 1, ["", "Vana açıldı (referans)", "Özgün - mevcut algoritma", "Özgün - filtreli",
                            "Ticari", "Ticari gecikme"], satirlar, [None, "0.00", "0.00", "0.00", "0.00", "+0.00;-0.00"])
     ort = r + 1
     oz.cell(row=ort, column=1, value="Ortalama fark (tespit - referans)").font = KALIN
     for col in "CDE":
         c = oz[f"{col}{ort}"]
-        c.value = f"=AVERAGE({col}{bas + 1}:{col}{r})-AVERAGE(B{bas + 1}:B{r})"
+        # tespit edilemeyen (boş) denemeler ortalamaya girmesin
+        a, b = f"{col}{bas + 1}:{col}{r}", f"B{bas + 1}:B{r}"
+        c.value = f'=IF(COUNT({a})=0,"",SUMPRODUCT(({a}<>"")*({a}-{b}))/COUNT({a}))'
         c.number_format = "+0.00;-0.00"
         c.font, c.border, c.fill = KALIN, CERCEVE, ACIK
     oz.cell(row=ort + 1, column=1,
@@ -179,9 +181,11 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
                          "İrtifa (m)", ["2E75B6", "ED7D31"], noktali=(3,)), "H5")
 
     u = ucus["df"]
-    ws_u, son_u = _veri_sayfasi(wb, "Uçuş Sim", ["Kalkıştan sonra (s)", "İrtifa (m)", "Eksenel ivme (g)"],
+    ucus_ad = "Uçuş Sim" if ornek_veri else "Uçuş"
+    ucus_baslik = "Uçuş simülasyonu" if ornek_veri else "Uçuş"
+    ws_u, son_u = _veri_sayfasi(wb, ucus_ad, ["Kalkıştan sonra (s)", "İrtifa (m)", "Eksenel ivme (g)"],
                                 [u["t_s"].to_numpy() - ucus["kalkis_s"], u["irtifa_m"].to_numpy(), u["az_g"].to_numpy()])
-    oz.add_chart(_grafik(ws_u, 1, [2], 2, son_u, "Uçuş simülasyonu - özgün UKB barometrik irtifa",
+    oz.add_chart(_grafik(ws_u, 1, [2], 2, son_u, f"{ucus_baslik} - özgün UKB barometrik irtifa",
                          "Kalkıştan sonra (s)", "İrtifa (m)", ["2E75B6"]), "H22")
 
     m = masa["ozgun"].iloc[::10]
@@ -206,7 +210,7 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
     ws_k = wb.create_sheet("Veri Kalitesi")
     tum = []
     for kaynak, kayit in [("Masa", masa["kayit"])] + [(f"Vakum {v['deneme']}", v["kayit"]) for v in vakumlar] + \
-                         [("Uçuş Sim", ucus["kayit"])]:
+                         [(ucus_ad, ucus["kayit"])]:
         tum += [[kaynak, k["tip"], k["t_ms"], k["detay"], k["islem"]] for k in kayit]
     _tablo(ws_k, 1, 1, ["Kayıt", "Sorun", "Zaman (ms)", "Detay", "İşlem"], tum)
     for col, w in zip("ABCDE", [11, 22, 11, 30, 30]):

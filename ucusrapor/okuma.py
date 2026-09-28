@@ -14,7 +14,8 @@ def oku_ozgun(yol):
     yazabiliyor. Bunları atlayıp satır numaralarını ayrıca döndürüyoruz.
     """
     satirlar, bozuk = [], []
-    with open(yol, encoding="utf-8", errors="replace") as f:
+    # Excel'de açılıp kaydedilen dosyaların başında BOM olabiliyor, utf-8-sig onu atlıyor
+    with open(yol, encoding="utf-8-sig", errors="replace") as f:
         baslik = f.readline().strip().split(",")
         if baslik != OZGUN_SUTUNLAR:
             raise ValueError(f"{Path(yol).name}: beklenmeyen başlık {baslik}")

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ucusrapor.apogee import basit_barometrik, filtreli_barometrik, zaman_kilitli_barometrik
+from ucusrapor.apogee import basit_barometrik, filtreli_barometrik
 from ucusrapor.karsilastirma import cikarimlar, masa_testi, saat_farkini_bul, ucus_analizi, vakum_testi
 from ucusrapor.okuma import oku_ozgun
 from ucusrapor.temizleme import temizle
@@ -41,6 +41,18 @@ def test_kopya_sifir_ve_bosluk_bulunur():
     assert tipler.count("SENSOR_OKUMA_HATASI") == 1
     assert tipler.count("KAYIT_BOSLUGU") == 1
     assert temiz["basinc_pa"].gt(100000).all()
+
+
+def test_takilma_tek_tekrari_saymaz_uzun_tekrari_sayar():
+    t = np.arange(0, 1200, 40)
+    p = 101000.0 + np.arange(t.size)                 # her örnek farklı
+    p[5] = p[4]                                      # tek tekrar: normal kabul edilmeli
+    p[15:19] = p[14]                                 # 5 örnek aynı: takılma
+    df = pd.DataFrame({"t_ms": t, "basinc_pa": p, "sicaklik_c": 22.0,
+                       "ax_g": 0.0, "ay_g": 0.0, "az_g": 1.0, "durum": 0})
+    _, kayit, _ = temizle(df)
+    takilma = [k["t_ms"] for k in kayit if k["tip"] == "SENSOR_TAKILMA"]
+    assert takilma == [600, 640, 680, 720]
 
 
 def test_saat_farki_bulunur():
@@ -86,7 +98,11 @@ def test_cikarimlar_sonuclardan_uretilir():
     v = vakum_testi(VERI / "vakum_1_ozgun.csv", VERI / "vakum_1_ticari.csv", 65.25, 1)
     notlar = cikarimlar(masa, [v], u)
     assert "güvenilir değil" in notlar["karar"][0]
-    assert "Zaman kilitli" in notlar["karar"][1]
+    assert "en yakın sonuç" in notlar["karar"][1]
+
+    # gerçek uçuşta doğru tepe zamanı bilinmez; o durumda hüküm verilmemeli
+    u3 = dict(u, gercek_tepe_s=None)
+    assert "doğrulanamadı" in cikarimlar(masa, [v], u3)["karar"][0]
 
     # tepe noktasını doğru bulan bir algoritma olsaydı cümle değişmeli
     u2 = dict(u, tablo=u["tablo"].assign(tespit_s=u["gercek_tepe_s"] + 0.2))

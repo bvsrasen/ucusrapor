@@ -33,7 +33,7 @@ def _tablo(ws, satir, sutun, basliklar, veriler, formatlar=None):
     return satir + len(veriler)
 
 
-def _grafik(ws_veri, x_sutun, y_sutunlar, ilk, son, baslik, x_ad, y_ad, renkler):
+def _grafik(ws_veri, x_sutun, y_sutunlar, ilk, son, baslik, x_ad, y_ad, renkler, noktali=()):
     g = ScatterChart()
     g.title, g.style, g.height, g.width = baslik, 13, 8, 18
     g.x_axis.title, g.y_axis.title = x_ad, y_ad
@@ -41,12 +41,19 @@ def _grafik(ws_veri, x_sutun, y_sutunlar, ilk, son, baslik, x_ad, y_ad, renkler)
     x = Reference(ws_veri, min_col=x_sutun, min_row=ilk, max_row=son)
     for sutun, renk in zip(y_sutunlar, renkler):
         s = Series(Reference(ws_veri, min_col=sutun, min_row=ilk - 1, max_row=son), x, title_from_data=True)
-        s.marker.symbol = "none"
-        s.graphicalProperties.line.solidFill = renk
-        s.graphicalProperties.line.width = 15000
-        if len(g.series) == 1:  # ikinci seri (ticari) üst üste binmesin diye kesikli
-            s.graphicalProperties.line.dashStyle = "dash"
-            s.graphicalProperties.line.width = 22000
+        if sutun in noktali:
+            # eğriler tam üst üste bindiğinde çizgi görünmüyor, bu seriyi nokta olarak çiziyoruz
+            s.marker.symbol, s.marker.size = "circle", 4
+            s.marker.graphicalProperties.solidFill = renk
+            s.marker.graphicalProperties.line.solidFill = renk
+            s.graphicalProperties.line.noFill = True
+        else:
+            s.marker.symbol = "none"
+            s.graphicalProperties.line.solidFill = renk
+            s.graphicalProperties.line.width = 15000
+            if len(g.series) == 1:  # ikinci seri (ticari) üst üste binmesin diye kesikli
+                s.graphicalProperties.line.dashStyle = "dash"
+                s.graphicalProperties.line.width = 22000
         g.series.append(s)
     return g
 
@@ -69,6 +76,11 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
     oz = wb.active
     oz.title = "Özet"
     oz.sheet_view.showGridLines = False
+    # yazdırırken / PDF'e çevirirken özet tek sayfaya sığsın
+    oz.page_setup.orientation = "landscape"
+    oz.page_setup.paperSize = oz.PAPERSIZE_A4
+    oz.page_setup.fitToWidth = oz.page_setup.fitToHeight = 1
+    oz.sheet_properties.pageSetUpPr.fitToPage = True
     for col, w in zip("ABCDEFGH", [34, 14, 14, 14, 14, 16, 3, 12]):
         oz.column_dimensions[col].width = w
 
@@ -93,17 +105,17 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
 
     # --- vakum testi
     r += 3
-    oz.cell(row=r, column=1, value="2. Vakum odası testi – tepe noktası tespiti (s)").font = ALT
+    oz.cell(row=r, column=1, value="2. Vakum odası testi - tepe noktası tespiti (s)").font = ALT
     bas = r + 1
     satirlar = []
     for k, v in enumerate(vakumlar):
         rr = bas + 1 + k
         satirlar.append([f"Deneme {v['deneme']}", v["vana_acilis_s"], v["ozgun_basit_s"], v["ozgun_filtreli_s"],
                          v["ticari_s"], f"=E{rr}-B{rr}"])
-    r = _tablo(oz, bas, 1, ["", "Vana açıldı (referans)", "Özgün – mevcut algoritma", "Özgün – filtreli",
+    r = _tablo(oz, bas, 1, ["", "Vana açıldı (referans)", "Özgün - mevcut algoritma", "Özgün - filtreli",
                            "Ticari", "Ticari gecikme"], satirlar, [None, "0.00", "0.00", "0.00", "0.00", "+0.00;-0.00"])
     ort = r + 1
-    oz.cell(row=ort, column=1, value="Ortalama fark (tespit − referans)").font = KALIN
+    oz.cell(row=ort, column=1, value="Ortalama fark (tespit - referans)").font = KALIN
     for col in "CDE":
         c = oz[f"{col}{ort}"]
         c.value = f"=AVERAGE({col}{bas + 1}:{col}{r})-AVERAGE(B{bas + 1}:B{r})"
@@ -111,13 +123,14 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
         c.font, c.border, c.fill = KALIN, CERCEVE, ACIK
     oz.cell(row=ort + 1, column=1,
             value=notlar["vakum"]).font = NOT
+    farklar = ", ".join(f"{v['saat_farki_s']:.2f}" for v in vakumlar)
     oz.cell(row=ort + 2, column=1,
             value=f"Kartların saatleri senkron değil; ticari kayıt irtifa eğrileri üst üste getirilerek "
-                  f"{', '.join(str(v['saat_farki_s']) for v in vakumlar)} s kaydırıldı.").font = NOT
+                  f"{farklar} s kaydırıldı.").font = NOT
 
     # --- uçuş simülasyonu
     r = ort + 4
-    oz.cell(row=r, column=1, value="3. Uçuş – tepe noktası yöntemleri").font = ALT
+    oz.cell(row=r, column=1, value="3. Uçuş - tepe noktası yöntemleri").font = ALT
     oz.cell(row=r + 1, column=1, value="Gerçek tepe noktası (kalkıştan sonra, s)").font = KALIN
     ref = oz.cell(row=r + 1, column=2, value=ucus["gercek_tepe_s"])
     ref.number_format, ref.border = "0.00", CERCEVE
@@ -158,22 +171,24 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
     t_o = v1["ozgun"]["t_s"].to_numpy()
     h_t = np.interp(t_o, v1["ticari"]["zaman_hizali_s"], v1["ticari"]["irtifa_m"], left=np.nan, right=np.nan)
     ortak = ~np.isnan(h_t)  # grafikte iki kart da aynı zaman aralığında görünsün
+    h_t = h_t[ortak]
+    h_t[np.arange(h_t.size) % 25 != 0] = np.nan  # ticari kartı ~1 s'de bir nokta olarak göster
     ws_v, son_v = _veri_sayfasi(wb, "Vakum 1", ["Zaman (s)", "Özgün (m)", "Ticari (m)"],
-                                [t_o[ortak], v1["ozgun"]["irtifa_m"].to_numpy()[ortak], h_t[ortak]])
-    oz.add_chart(_grafik(ws_v, 1, [2, 3], 2, son_v, "Vakum denemesi 1 – iki kart", "Zaman (s)",
-                         "İrtifa (m)", ["2E75B6", "ED7D31"]), "H5")
+                                [t_o[ortak], v1["ozgun"]["irtifa_m"].to_numpy()[ortak], h_t])
+    oz.add_chart(_grafik(ws_v, 1, [2, 3], 2, son_v, "Vakum denemesi 1 - iki kart", "Zaman (s)",
+                         "İrtifa (m)", ["2E75B6", "ED7D31"], noktali=(3,)), "H5")
 
     u = ucus["df"]
     ws_u, son_u = _veri_sayfasi(wb, "Uçuş Sim", ["Kalkıştan sonra (s)", "İrtifa (m)", "Eksenel ivme (g)"],
                                 [u["t_s"].to_numpy() - ucus["kalkis_s"], u["irtifa_m"].to_numpy(), u["az_g"].to_numpy()])
-    oz.add_chart(_grafik(ws_u, 1, [2], 2, son_u, "Uçuş simülasyonu – özgün UKB barometrik irtifa",
+    oz.add_chart(_grafik(ws_u, 1, [2], 2, son_u, "Uçuş simülasyonu - özgün UKB barometrik irtifa",
                          "Kalkıştan sonra (s)", "İrtifa (m)", ["2E75B6"]), "H22")
 
     m = masa["ozgun"].iloc[::10]
     mt = np.interp(m["t_s"], masa["ticari"]["zaman_s"], masa["ticari"]["irtifa_m"])
     ws_m, son_m = _veri_sayfasi(wb, "Masa", ["Zaman (s)", "Özgün (m)", "Ticari (m)", "Kart sıcaklığı (°C)"],
                                 [m["t_s"].to_numpy(), m["irtifa_m"].to_numpy(), mt, m["sicaklik_c"].to_numpy()])
-    oz.add_chart(_grafik(ws_m, 1, [2, 3], 2, son_m, "Masa testi – durağan irtifa okuması", "Zaman (s)",
+    oz.add_chart(_grafik(ws_m, 1, [2, 3], 2, son_m, "Masa testi - durağan irtifa okuması", "Zaman (s)",
                          "İrtifa (m)", ["2E75B6", "ED7D31"]), "H39")
 
     def sayi(x):

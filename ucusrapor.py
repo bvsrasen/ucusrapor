@@ -15,6 +15,10 @@ from ucusrapor.karsilastirma import cikarimlar, masa_testi, ucus_analizi, vakum_
 from ucusrapor.rapor import rapor_yaz
 
 
+def _s(x):
+    return "-" if x is None or pd.isna(x) else f"{x:.2f} s"
+
+
 def main():
     ap = argparse.ArgumentParser(description="UKB test karşılaştırma raporu")
     ap.add_argument("--veri", default="veri", help="test kayıtlarının bulunduğu klasör")
@@ -37,15 +41,17 @@ def main():
         n = int(r["deneme"])
         v = vakum_testi(k / f"vakum_{n}_ozgun.csv", k / f"vakum_{n}_ticari.csv", float(r["vana_acilis_s"]), n)
         vakumlar.append(v)
-        print(f"  vakum {n}: referans {v['vana_acilis_s']:.1f} s | özgün (mevcut) {v['ozgun_basit_s']:.1f} s"
-              f" | özgün (filtreli) {v['ozgun_filtreli_s']:.1f} s | ticari {v['ticari_s']:.1f} s")
+        print(f"  vakum {n}: referans {v['vana_acilis_s']:.1f} s | özgün (mevcut) {_s(v['ozgun_basit_s'])}"
+              f" | özgün (filtreli) {_s(v['ozgun_filtreli_s'])} | ticari {_s(v['ticari_s'])}")
 
+    # gerçek bir uçuşta tepe noktasının doğru zamanı bilinmez; o zaman gercek_tepe_s sütunu boş bırakılabilir
     ref = pd.read_csv(k / "ucus_referans.csv").iloc[0]
-    ucus = ucus_analizi(k / "ucus_ozgun.csv", float(ref["zemin_basinci_pa"]), args.zamanlayici,
-                        float(ref["gercek_tepe_s"]))
-    print(f"  uçuş simülasyonu: gerçek tepe {ucus['gercek_tepe_s']:.2f} s")
+    gercek = ref.get("gercek_tepe_s")
+    gercek = None if gercek is None or pd.isna(gercek) else float(gercek)
+    ucus = ucus_analizi(k / "ucus_ozgun.csv", float(ref["zemin_basinci_pa"]), args.zamanlayici, gercek)
+    print(f"  uçuş: gerçek tepe {_s(gercek)}")
     for s in ucus["tablo"].itertuples(index=False):
-        print(f"      {s.yontem:<38} {s.tespit_s:>6.2f} s")
+        print(f"      {s.yontem:<38} {_s(s.tespit_s):>8}")
 
     ates = pd.read_csv(k / "ateslemeler.csv", dtype=str).fillna("")
     Path(args.cikti).parent.mkdir(parents=True, exist_ok=True)

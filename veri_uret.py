@@ -40,11 +40,11 @@ def ozgun_kaydi_boz(satirlar, rng, bosluk_olasiligi=0.004, i2c_olasiligi=0.003, 
     """SD kart / sensör kaynaklı gerçekçi bozulmalar ekler.
 
     - SD yazma gecikmesi: arada 150-600 ms'lik veri kaybı
-    - I2C okuma hatası: basınç 0 ya da bir önceki değerin aynısı (takılı kalma)
+    - I2C okuma hatası: basınç 0 ya da birkaç örnek boyunca aynı değerde takılı kalma
     - Aynı satırın iki kez yazılması
     - Kaydın sonunda yarım kalmış satır (güç kesilince)
     """
-    cikti, atla = [], 0
+    cikti, atla, takili = [], 0, 0
     for i, s in enumerate(satirlar):
         if atla:
             atla -= 1
@@ -53,11 +53,16 @@ def ozgun_kaydi_boz(satirlar, rng, bosluk_olasiligi=0.004, i2c_olasiligi=0.003, 
             atla = int(rng.integers(4, 15))
             continue
         s = list(s)
-        r = rng.random()
-        if r < i2c_olasiligi / 2:
-            s[1] = 0
-        elif r < i2c_olasiligi and cikti:
+        if takili and cikti:
             s[1] = cikti[-1][1]
+            takili -= 1
+        else:
+            r = rng.random()
+            if r < i2c_olasiligi / 2:
+                s[1] = 0
+            elif r < i2c_olasiligi and cikti:
+                s[1] = cikti[-1][1]
+                takili = int(rng.integers(3, 7))  # sensör birkaç örnek daha aynı değeri döndürüyor
         cikti.append(s)
         if rng.random() < kopya_olasiligi:
             cikti.append(list(s))
@@ -157,15 +162,17 @@ def ucus(rng):
     dt, t, h, v = 0.04, 0.0, 0.0, 0.0
     rampa, yanma = 2.0, 3.4
     m0, m1, cd_a = 24.0, 20.5, 0.021
+    # her uçuş biraz farklı: motor itkisi ~%3, sürükleme ~%5 sapabiliyor
+    itki_carpan = rng.normal(1.0, 0.03)
+    cd_a *= rng.normal(1.0, 0.05)
     satirlar = []
 
     def itki(tu):
         if tu < 0 or tu > yanma:
             return 0.0
-        return 5600 if tu < 0.25 else 3900 - 700 * (tu / yanma)
+        return itki_carpan * (5600 if tu < 0.25 else 3900 - 700 * (tu / yanma))
 
     tepe_t, tepe_h = None, None
-    vmaks = 0.0
     while True:
         tu = t - rampa
         durum = 0 if tu < 0 else (1 if tu < 0.3 else (2 if tu < yanma else 3))

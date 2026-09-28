@@ -126,7 +126,10 @@ def cikarimlar(masa, vakumlar, ucus, tolerans_s=1.0):
 
     # karar için çıkarımlar
     k = []
-    if hata_basit is None or abs(hata_basit) > tolerans_s:
+    if ucus["gercek_tepe_s"] is None:
+        k.append("Gerçek tepe noktası zamanı bilinmediği için uçuştaki yöntemler doğrulanamadı; "
+                 "tablodaki tespit anlarını birbirleriyle ve ivme verisiyle karşılaştırın.")
+    elif hata_basit is None or abs(hata_basit) > tolerans_s:
         k.append("Özgün kartın mevcut tepe noktası algoritması bu hâliyle kurtarmayı tetiklemek için güvenilir değil.")
     else:
         k.append(f"Özgün kartın mevcut algoritması uçuşta tolerans içinde ({hata_basit:+.2f} s).")

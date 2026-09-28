@@ -117,7 +117,7 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
 
     # --- uçuş simülasyonu
     r = ort + 4
-    oz.cell(row=r, column=1, value="3. Uçuş simülasyonu – tepe noktası yöntemleri").font = ALT
+    oz.cell(row=r, column=1, value="3. Uçuş – tepe noktası yöntemleri").font = ALT
     oz.cell(row=r + 1, column=1, value="Gerçek tepe noktası (kalkıştan sonra, s)").font = KALIN
     ref = oz.cell(row=r + 1, column=2, value=ucus["gercek_tepe_s"])
     ref.number_format, ref.border = "0.00", CERCEVE
@@ -126,8 +126,9 @@ def rapor_yaz(cikti, masa, vakumlar, ucus, ateslemeler, kaynak_klasor, notlar, o
     satirlar = []
     for k, s in enumerate(ucus["tablo"].itertuples(index=False)):
         rr = bas + 1 + k
-        satirlar.append([s.yontem, s.tespit_s, s.tespit_irtifa_m, f"=B{rr}-{ref_adres}",
-                         f'=IF(ABS(D{rr})<=1,"uygun",IF(D{rr}<0,"erken","geç"))'])
+        satirlar.append([s.yontem, s.tespit_s, s.tespit_irtifa_m,
+                         f'=IF(OR({ref_adres}="",B{rr}=""),"",B{rr}-{ref_adres})',
+                         f'=IF(D{rr}="","",IF(ABS(D{rr})<=1,"uygun",IF(D{rr}<0,"erken","geç")))'])
     r = _tablo(oz, bas, 1, ["Yöntem", "Tespit (s)", "Tespit irtifası (m)", "Hata (s)", "Sonuç"],
                satirlar, [None, "0.00", "#,##0", "+0.00;-0.00", None])
     for k, n in enumerate(notlar["ucus"]):

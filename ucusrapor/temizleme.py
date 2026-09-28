@@ -4,6 +4,7 @@ import numpy as np
 from .okuma import irtifa_hesapla
 
 NOMINAL_DT_MS = 40  # özgün kart 25 Hz kaydediyor
+TAKILMA_MIN = 4     # bu kadar örnek aynı basınçta kalırsa sensör takılmış sayılır
 
 
 def temizle(df, bozuk_satirlar=(), p0=None):
@@ -22,9 +23,13 @@ def temizle(df, bozuk_satirlar=(), p0=None):
         kayit.append({"tip": "KOPYA_SATIR", "t_ms": int(t), "detay": "", "islem": "silindi"})
     df = df[~kopya].sort_values("t_ms").reset_index(drop=True)
 
-    # I2C okuma hatası: basınç 0 geliyor ya da bir önceki değerde takılı kalıyor
+    # I2C okuma hatası: basınç 0 geliyor ya da birkaç örnek aynı değerde takılı kalıyor.
+    # Sensör 1 Pa çözünürlüklü olduğu için art arda iki eşit okuma normal olabiliyor;
+    # en az TAKILMA_MIN örnek aynı kalırsa takılma sayıyoruz (ilk örnek geçerli kabul ediliyor).
     sifir = df["basinc_pa"] <= 0
-    takili = (df["basinc_pa"].diff() == 0) & ~sifir
+    grup = (df["basinc_pa"] != df["basinc_pa"].shift()).cumsum()
+    uzunluk = df.groupby(grup)["basinc_pa"].transform("size")
+    takili = (uzunluk >= TAKILMA_MIN) & (grup.duplicated()) & ~sifir
     for i in df.index[sifir]:
         kayit.append({"tip": "SENSOR_OKUMA_HATASI", "t_ms": int(df.at[i, "t_ms"]), "detay": "basınç = 0",
                       "islem": "interpolasyonla dolduruldu"})

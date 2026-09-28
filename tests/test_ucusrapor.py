@@ -10,6 +10,7 @@ from ucusrapor.okuma import oku_ozgun
 from ucusrapor.temizleme import temizle
 
 VERI = Path(__file__).resolve().parent.parent / "veri"
+ZAMANLAYICI_S = 20.9  # ucusrapor.py'deki varsayılan
 
 
 def test_bozuk_ve_yarim_satirlar_atlanir(tmp_path):
@@ -84,7 +85,7 @@ def test_vakum_denemeleri_ticari_tutarli():
 
 def test_ucusta_transonik_bolge_erken_tetikletir_zaman_kilidi_duzeltir():
     ref = pd.read_csv(VERI / "ucus_referans.csv").iloc[0]
-    u = ucus_analizi(VERI / "ucus_ozgun.csv", ref["zemin_basinci_pa"], 20.9, ref["gercek_tepe_s"])
+    u = ucus_analizi(VERI / "ucus_ozgun.csv", ref["zemin_basinci_pa"], ZAMANLAYICI_S, ref["gercek_tepe_s"])
     tablo = u["tablo"].set_index("yontem")["tespit_s"]
     assert tablo["Basit barometrik (mevcut)"] < 8
     assert abs(tablo["Zaman kilitli + filtreli barometrik"] - ref["gercek_tepe_s"]) < 1.5
@@ -93,9 +94,10 @@ def test_ucusta_transonik_bolge_erken_tetikletir_zaman_kilidi_duzeltir():
 
 def test_cikarimlar_sonuclardan_uretilir():
     ref = pd.read_csv(VERI / "ucus_referans.csv").iloc[0]
-    u = ucus_analizi(VERI / "ucus_ozgun.csv", ref["zemin_basinci_pa"], 20.9, ref["gercek_tepe_s"])
+    u = ucus_analizi(VERI / "ucus_ozgun.csv", ref["zemin_basinci_pa"], ZAMANLAYICI_S, ref["gercek_tepe_s"])
     masa = masa_testi(VERI / "masa_ozgun.csv", VERI / "masa_ticari.csv")
-    v = vakum_testi(VERI / "vakum_1_ozgun.csv", VERI / "vakum_1_ticari.csv", 65.25, 1)
+    vana = pd.read_csv(VERI / "vakum_referans.csv").set_index("deneme").loc[1, "vana_acilis_s"]
+    v = vakum_testi(VERI / "vakum_1_ozgun.csv", VERI / "vakum_1_ticari.csv", vana, 1)
     notlar = cikarimlar(masa, [v], u)
     assert "güvenilir değil" in notlar["karar"][0]
     assert "en yakın sonuç" in notlar["karar"][1]

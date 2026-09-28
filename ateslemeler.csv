@@ -1,0 +1,7 @@
+deneme,ukb,barut_g,sureklilik_ohm,gecikme_ms,ayrilma,not
+1,özgün,0.8,1.2,32,hayır,"barut yetmedi, burun konisi oynadı ama çıkmadı"
+2,özgün,1.2,1.3,29,evet,
+3,ticari,1.2,1.1,,evet,komut-ateşleme gecikmesi ölçülemedi (ticari kart iç zamanlama)
+4,özgün,1.2,0.0,,hayır,"süreklilik yok, konnektör gevşek; yeniden takıldı"
+5,özgün,1.2,1.2,31,evet,
+6,ticari,1.2,1.2,,evet,

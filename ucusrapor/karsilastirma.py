@@ -68,6 +68,8 @@ def ucus_analizi(yol, zemin_basinci, zamanlayici_s, gercek_tepe_s=None):
     d, bozuk = oku_ozgun(yol)
     df, kayit, _ = temizle(d, bozuk, p0=zemin_basinci)
     kalkis = float(df.loc[df["durum"] >= 1, "t_s"].min())
+    if np.isnan(kalkis):
+        raise ValueError(f"{yol}: durum sütununda kalkış (durum >= 1) yok")
     yontemler = hepsini_dene(df, kalkis, zamanlayici_s)
     tablo = []
     for ad, tespit in yontemler.items():

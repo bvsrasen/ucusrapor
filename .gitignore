@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Ham NCSU kayıtları (~200 MB) repoya girmiyor, veri_hazirla.py indiriyor
+veri/ham/
+
+# Üretilen rapor
+rapor/
+~$*.xlsx
+
+c/build/
+.DS_Store

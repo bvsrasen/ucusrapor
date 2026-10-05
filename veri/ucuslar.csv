@@ -1,0 +1,13 @@
+ucus,tarih,yer,sensor,bildirilen_tepe_m,not,kaynak
+genesis_launch_1,2024-11-16,"Bayboro, NC",Parker-LORD 3DM-CX5-15,459.46,Hava freni denemesi; frenler süzülmede açılmadı.,AirbrakesV2@c242c66/launch_data/old_imu_launches/genesis_launch_1.csv
+genesis_launch_2,2024-11-16,"Bayboro, NC",Parker-LORD 3DM-CX5-15,463.62,Aynı günün ikinci uçuşu; frenler yine zamanında açılmadı.,AirbrakesV2@c242c66/launch_data/old_imu_launches/genesis_launch_2.csv
+legacy_launch_1,2025-01-25,"Bayboro, NC",Parker-LORD 3DM-CX5-15,631.14,Kayıtta zaman atlaması ve birkaç saniyelik eksik veri var.,AirbrakesV2@c242c66/launch_data/old_imu_launches/legacy_launch_1.csv
+pelicanator_launch_1,2025-02-22,"Bayboro, NC",Parker-LORD 3DM-CX5-15,1208.28,Frenlerin tam çalıştığı ilk uçuş; kayıt inişten önce kesiliyor.,AirbrakesV2@c242c66/launch_data/old_imu_launches/pelicanator_launch_1.csv
+pelicanator_launch_2,2025-03-08,"Dalzell, SC",Parker-LORD 3DM-CX5-15,1090.16,Rüzgârlı bir gün; frenler açılmadı.,AirbrakesV2@c242c66/launch_data/old_imu_launches/pelicanator_launch_2.csv
+pelicanator_launch_4,2025-05-04,"Bragg Farms, AL",Parker-LORD 3DM-CX5-15,1293.72,NASA Student Launch 2025 yarışma uçuşu.,AirbrakesV2@c242c66/launch_data/old_imu_launches/pelicanator_launch_4.csv
+government_work_1,2025-11-01,"Bayboro, NC",Parker-LORD 3DM-CX5-15,496.16,Küçük ölçekli roket; frenler süzülmenin başında açıldı.,AirbrakesV2@c242c66/launch_data/old_imu_launches/government_work_1_time_fix.csv
+government_work_2,2026-02-07,"Dalzell, SC",Parker-LORD 3DM-CX5-15,724.13,Yeni tepe tahmini yazılımının denendiği sorunsuz uçuş.,AirbrakesV2@c242c66/launch_data/old_imu_launches/government_work_2.csv
+jackpot_launch_1,2025-02-21,"Bayboro, NC",FIRM v0.1,762.28,FIRM kartının tek sensör olarak kullanıldığı ilk uçuş; frenler süzülmenin hemen başında açıldı.,AirbrakesV2@8c51e14/launch_data/real_firm_launches/jackpot_launch_1.csv
+jackpot_launch_2,2025-03-14,"Bayboro, NC",FIRM v1.0,1154.1,Frenler içeriden sızdırmaz değildi; açılınca büyük bir basınç sıçraması oldu.,AirbrakesV2@8c51e14/launch_data/real_firm_launches/jackpot_launch_2.csv
+jackpot_launch_3,2026-04-04,"Monterey, VA",FIRM v1.0,1131.2,Frenler çalıştı; ana paraşüt ipleri dolandı.,AirbrakesV2@8c51e14/launch_data/real_firm_launches/jackpot_launch_3.csv
+jackpot_launch_4,2026-04-24,"Huntsville, AL",FIRM v1.0,1403.9,NASA Student Launch 2026 yarışma uçuşu; frenler tepeye yakın kısa süre açıldı.,AirbrakesV2@8c51e14/launch_data/real_firm_launches/jackpot_launch_4.csv
